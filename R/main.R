@@ -81,7 +81,6 @@
   WAIT_INTERVAL    <- 10.0
   loop_max_counter <- 24*360 # 24 hours of maximum waiting
   results          <- NULL
-  #TODO: test that loop
   while(loop_max_counter > 0){
     loop_max_counter <- loop_max_counter - 1
     rtry <- try({
@@ -95,7 +94,7 @@
       eta <- .asses_total_training_time(exp, res_stats)
       if (res_stats$initiated_cnt + res_stats$learning_cnt +
           res_stats$done_cnt + res_stats$error_cnt == 0) {
-        eta <- 'estimating'
+        eta <- "estimating"
       } else {
         eta = round(eta, 2)
       }
@@ -124,6 +123,8 @@
 #' @param validy data.frame/matrix with validation labels
 #' @param proj_title charcater with project title
 #' @param exp_title charcater with experiment title
+#' @param dataset_title charcater with dataset title
+#' @param val_dataset_title charcater with validation dataset title
 #' @param metric charcater with metric
 #' @param algorithms list of algorithms to use
 #' @param validation_kfolds number of folds to be used in validation
@@ -136,19 +137,45 @@
 #' @param single_algorithm_time_limit numeric with time limit to calculate algorithm
 #'
 #' @return structure with the best model
-.start_experiment <- function(x, y, validx, validy, proj_title, exp_title, metric,
+.start_experiment <- function(x, y, validx, validy, proj_title, exp_title,
+                              dataset_title, val_ds_title, metric,
                               algorithms, validation_kfolds, validation_shuffle,
                               validation_stratify, validation_train_split,
                               tuning_mode, create_ensemble, single_algorithm_time_limit){
   task <- .obtain_task(y)
+  if (length(algorithms) == 0) {
+    algorithms <- ifelse(task == "reg",
+                         MLJAR_DEFAULT_ALGORITHMS$regression,
+                         MLJAR_DEFAULT_ALGORITHMS$bin_class)
+    warning(sprintf("You did not specify algorithms: defaults for task %s are %s",
+                    task, paste(algorithms, collapse=" ")))
+  }
+  if (nchar(metric) == 0) {
+    metric <- ifelse(task == "reg",
+                     MLJAR_DEFAULT_METRICS$regression,
+                     MLJAR_DEFAULT_METRICS$bin_class)
+    warning(sprintf("You did not specify metric: defaults for task %s are %s",
+                    task, paste(metric, collapse=" ")))
+  }
   # create project and datasets
   tmp_data_filename <- .data_to_file(x, y)
-  project_details <- create_project(proj_title, task)
-  ds_title <- paste0("Dataset", round(runif(1, 1, 999)))
-  dataset <- add_dataset_if_not_exists(project_details$hid, tmp_data_filename, ds_title)
+  tmp_proj_hid <- .check_if_project_exists(proj_title)
+  if (is.null(tmp_proj_hid))
+    project_details <- create_project(proj_title, task)
+  else {
+    print(sprintf("Project <%s> exists.", proj_title))
+    project_details <- get_project(tmp_proj_hid)$project
+  }
+  ds_title <- ifelse(is.null(dataset_title),
+                     paste0("Dataset", round(runif(1, 1, 999))),
+                     dataset_title )
+  dataset <- add_dataset_if_not_exists(project_details$hid,
+                                       tmp_data_filename, ds_title)
   if (!is.null(validx) && !is.null(validy)){
     tmp_valid_data_filename <- .data_to_file(validx, validy)
-    val_title <- paste0("Val_dataset", round(runif(1, 1, 999)))
+    val_title <- ifelse(is.null(val_ds_title),
+                        paste0("Val_dataset", round(runif(1, 1, 999))),
+                        val_ds_title)
     valdataset <- add_dataset_if_not_exists(project_details$hid, tmp_valid_data_filename, val_title)
   } else {
     valdataset <- NULL
@@ -174,32 +201,34 @@
 #' @param validy data.frame/matrix with validation labels
 #' @param proj_title charcater with project title
 #' @param exp_title charcater with experiment title
+#' @param dataset_title charcater with dataset name
+#' @param val_dataset_title charcater with validation dataset name
 #' @param metric charcater with metric
 #' For binary classification there are metrics:
-#' - auc which is for Area Under ROC Curve
-#' - logloss which is for Logarithmic Loss
+#' "auc" which is for Area Under ROC Curve,
+#' "logloss" which is for Logarithmic Loss.
 #' For regression tasks:
-#' - rmse which is Root Mean Square Error
-#' - mse which is for Mean Square Error
-#' - mase which is for Mean Absolute Error
+#' "rmse" which is Root Mean Square Error,
+#' "mse" which is for Mean Square Error,
+#' "mase" which is for Mean Absolute Error.
 #' @param wait_till_all_done boolean saying whether function should wait
 #' till all models are done
 #' @param algorithms list of algorithms to use
 #' For binary classification task available algorithm are:
-#' - xgb which is for Xgboost
-#' - lgb which is for LightGBM
-#' - mlp which is for Neural Network
-#' - rfc which is for Random Forest
-#' - etc which is for Extra Trees
-#' - rgfc which is for Regularized Greedy Forest
-#' - knnc which is for k-Nearest Neighbors
-#' - logreg which is for Logistic Regression
+#' "xgb" which is for Xgboost,
+#' "lgb" which is for LightGBM
+#' "mlp" which is for Neural Network,
+#' "rfc" which is for Random Forest,
+#' "etc" which is for Extra Trees,
+#' "rgfc" which is for Regularized Greedy Forest,
+#' "knnc" which is for k-Nearest Neighbors,
+#' "logreg" which is for Logistic Regression.
 #' For regression task there are available algorithms:
-#'   - xgbr which is for Xgboost
-#' - lgbr which is for LightGBM
-#' - rgfr which is for Regularized Greedy Forest
-#' - rfr which is for Random Forest
-#' - etr which is for Extra Trees
+#' "xgbr" which is for Xgboost,
+#' "lgbr" which is for LightGBM,
+#' "rgfr" which is for Regularized Greedy Forest,
+#' "rfr" which is for Random Forest,
+#' "etr" which is for Extra Trees.
 #' @param validation_kfolds number of folds to be used in validation
 #' @param validation_shuffle boolean which specify if shuffle samples before training
 #' @param validation_stratify boolean which decides whether samples will be
@@ -213,6 +242,7 @@
 #' @export
 mljar_fit <- function(x, y, validx=NULL, validy=NULL,
                       proj_title=NULL, exp_title=NULL,
+                      dataset_title=NULL, val_dataset_title=NULL,
                       algorithms = c(), metric = "",
                       wait_till_all_done = TRUE,
                       validation_kfolds = MLJAR_DEFAULT_FOLDS,
@@ -228,10 +258,8 @@ mljar_fit <- function(x, y, validx=NULL, validy=NULL,
   if (is.null(exp_title)){
     proj_title <- paste0("Experiment", round(runif(1, 1, 999)))
   }
-  if (length(algorithms) == 0){
-    stop("You must specify non-empty vector of algorithms to use.")
-  }
-  model <- .start_experiment(x, y, validx, validy, proj_title, exp_title, metric,
+  model <- .start_experiment(x, y, validx, validy, proj_title, exp_title,
+                             dataset_title, val_dataset_title, metric,
                              algorithms, validation_kfolds, validation_shuffle,
                              validation_stratify, validation_train_split,
                              tuning_mode, create_ensemble,
@@ -259,23 +287,17 @@ mljar_predict <- function(model, x_pred, project_title){
     stop("NULL data")
   }
   # look for project
-  projects <- get_projects()
-  proj_hid <- NULL
-  for(i in 1:length(projects$projects)) {
-    if (projects$projects[[i]]$title == project_title){
-      proj_hid <- projects$projects[[i]]$hid
-      break
-    }
-  }
+  proj_hid <- .check_if_project_exists(project_title)
   if (is.null(proj_hid)) stop("Project not found! Check title and try again.")
   # adding prediction dataset
   tmp_data_filename <- .data_to_file(x_pred)
   dspred_title <- paste0("Pred_dataset", round(runif(1, 1, 999)))
   pred_ds  <- add_dataset_if_not_exists(proj_hid, tmp_data_filename, dspred_title, TRUE)
   total_checks <- 1000
+  cat("Prediction download started")
   for (i in 1:total_checks){
     prediction <- get_prediction(proj_hid, pred_ds$dataset$hid, model$hid)
-    print(sprintf("Downloading prediction - %s", i))
+    cat("\r", sprintf("Downloading prediction - %s          ", i))
     # for first iteration we send dataset for prediction
     if (i == 1 && length(prediction$prediction) == 0) {
       submit_predict_job(proj_hid, pred_ds$dataset$hid, model$hid)
@@ -289,3 +311,54 @@ mljar_predict <- function(model, x_pred, project_title){
   }
   return(NULL)
 }
+
+#' Gives data.frame with basic data of all models
+#'
+#' You can later get some specific model by calling
+#' e.g. \code{mod <- get_model(project_title, experiment_title, model_hid)}.
+#'
+#' @param project_title character with project title
+#' @param exp_title character with experiment title
+#'
+#' @return data.frame with model's "hid", "model_type", "metric_value",
+#' "metric_type"
+#'
+#' @export
+get_all_models <- function(project_title, exp_title) {
+  # Look for project title
+  flag.proj.title <- FALSE
+  prj_hid <- .check_if_project_exists(project_title)
+  if (is.null(prj_hid))
+    stop("MLJAR cannot find a project with such a title. Check and try again.")
+  # Look for experiment title
+  flag.proj.exp <- FALSE
+  ge <- get_experiments(prj_hid)
+  if (length(ge$experiments) == 0) stop("No experiments found.")
+  for(i in 1:length(ge$experiments)) {
+    if (ge$experiments[[i]]$title == exp_title){
+      flag.proj.exp <- TRUE
+      break
+    }
+  }
+  if (flag.proj.exp == FALSE)
+    stop("MLJAR cannot find an experiment with such a title. Check and try again.")
+  exp_hid <- ge$experiments[[i]]$hid
+  exp <- get_experiment(exp_hid)
+  if (exp$experiment$compute_now != 2)
+    stop("Experiment still in progress. Wait till its done!")
+  curr_results <- get_results(prj_hid, exp_hid)
+  column.names <- c("hid", "model_type", "metric_value",
+                    "metric_type", "validation_scheme")
+  filter_curr_res <- curr_results$results[unlist(lapply(curr_results$results,
+                                          function(x) x$experiment==exp_title))]
+  tmp_sa <- sapply(filter_curr_res,
+             function(x) c(x$hid, x$model_type, x$metric_value,
+                           x$metric_type, x$validation_scheme),
+             simplify = FALSE, USE.NAMES = TRUE)
+  df_res <- t(as.data.frame(tmp_sa,
+                            row.names = column.names,
+                            col.names = 1:length(tmp_sa)))
+  df_res <- data.frame(df_res, row.names = NULL)
+  return(df_res)
+}
+

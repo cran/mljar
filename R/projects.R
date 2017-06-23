@@ -24,6 +24,27 @@ print.get_projects <- function(x, ...) {
   invisible(x)
 }
 
+#' Print all projects
+#'
+#' Gives data.frame with basic information about existing projects
+#'
+#' @return data.frame with projects
+#' @export
+print_all_projects <- function() {
+  columns = c("hid", "title", "task", "description")
+  projects <- get_projects()
+  if (length(projects$projects) == 0) return(data.frame())
+  tmp_sa <- sapply(projects$projects,
+                   function(x) c(x$hid, x$title, x$task,
+                                 ifelse(!is.null(x$description), x$description, "")),
+                   simplify = FALSE, USE.NAMES = TRUE)
+  df_proj <- t(as.data.frame(tmp_sa,
+                            row.names = columns,
+                            col.names = 1:length(tmp_sa)))
+  df_proj <- data.frame(df_proj, row.names = NULL)
+  return(df_proj)
+}
+
 #' Get project
 #'
 #' Get data from a project of specified hid
@@ -75,7 +96,7 @@ create_project <-function(title, task, description=""){
                body = data, encode = "form")
   .check_response_status(resp, 201)
   if (status_code(resp)==201){
-    print(sprintf("Project '%s' succesfully created!", title))
+    print(sprintf("Project <%s> succesfully created!", title))
   }
   project_details <- jsonlite::fromJSON(content(resp, "text", encoding = "UTF-8"), simplifyVector = FALSE)
   return(project_details)
@@ -98,7 +119,7 @@ delete_project <-function(hid){
 
 # Helper project functions
 
-#' Verify_if_project_exists
+#' Verify if project exists
 #'
 #' Checks if there is no project with the same name and task.
 #'
@@ -114,4 +135,24 @@ delete_project <-function(hid){
     }
   }
   return(TRUE)
+}
+
+#' Checks if project exists
+#'
+#' It bases only on title and returns project's hid if it exists.
+#'
+#' @param project_title character with project title
+#'
+#' @return character of project with its identifier or NULL
+.check_if_project_exists <- function(project_title) {
+  projects <- get_projects()
+  proj_hid <- NULL
+  if (length(projects$projects) == 0) return(NULL)
+  for(i in 1:length(projects$projects)) {
+    if (projects$projects[[i]]$title == project_title){
+      proj_hid <- projects$projects[[i]]$hid
+      break
+    }
+  }
+  return(proj_hid)
 }

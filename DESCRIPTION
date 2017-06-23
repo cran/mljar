@@ -1,6 +1,6 @@
 Package: mljar
 Title: R API for MLJAR
-Version: 0.1.0
+Version: 0.1.1
 Author: Dominik Krzemiński <raymon92@gmail.com>
 Maintainer: Piotr Płoński <contact@mljar.com>
 Description: Provides an R API wrapper for 'mljar.com', a web service allowing for on-line training for machine learning models (see <https://mljar.com> for more information).
@@ -14,6 +14,6 @@ Suggests: testthat, covr
 Depends: R (>= 3.1.2)
 Imports: httr, jsonlite, readr
 NeedsCompilation: no
-Packaged: 2017-06-01 13:02:00 UTC; krzemid1
+Packaged: 2017-06-23 10:39:23 UTC; krzemid1
 Repository: CRAN
-Date/Publication: 2017-06-01 14:01:21 UTC
+Date/Publication: 2017-06-23 11:31:11 UTC
